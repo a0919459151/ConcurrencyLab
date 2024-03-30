@@ -1,0 +1,1 @@
+ab -n 100 -c 10 -T 'application/json' -p .\Joe\request.json 'http://localhost:5276/Product/DecreaseProductAmount'

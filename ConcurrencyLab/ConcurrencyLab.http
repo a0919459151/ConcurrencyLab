@@ -1,0 +1,6 @@
+@ConcurrencyLab_HostAddress = http://localhost:5276
+
+GET {{ConcurrencyLab_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
