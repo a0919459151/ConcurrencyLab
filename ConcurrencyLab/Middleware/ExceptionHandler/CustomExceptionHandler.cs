@@ -1,5 +1,6 @@
-﻿using ConcurrencyLab.Exceptions;
-using Microsoft.AspNetCore.Diagnostics;
+﻿using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace ConcurrencyLab.Middleware.ExceptionHandler;
 
@@ -10,29 +11,46 @@ public class CustomExceptionHandler : IExceptionHandler
         // Handle AppException
         if (exception is AppException)
         {
-            Console.WriteLine();
+            // Response 400
+            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            httpContext.Response.ContentType = "application/json";
+
+            var problemDetails = new ProblemDetails
+            {
+                Title = "Bad Request",
+                Detail = exception.Message,
+                Status = StatusCodes.Status400BadRequest,
+                Type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",
+            };
+
+            var json = JsonSerializer.Serialize(problemDetails);
+
+            httpContext.Response.WriteAsync(json, cancellationToken);
+
             Console.WriteLine(exception.Message);
-            Console.WriteLine();
-
-            return new ValueTask<bool>(true);
         }
-        // Handle DbUpdateConcurrencyException
-        else if (exception is DbUpdateConcurrencyException)
-        {
-            Console.WriteLine();
-            Console.WriteLine("EF Core 發生 ConcurrencyException");
-            Console.WriteLine();
-
-            return new ValueTask<bool>(true);
-        }
-        // other exceptions
+        // Other exceptions
         else
         {
-            Console.WriteLine();
-            Console.WriteLine("Server error");
-            Console.WriteLine();
+            // Response 500
+            httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            httpContext.Response.ContentType = "application/json";
 
-            return new ValueTask<bool>(true);
+            var problemDetails = new ProblemDetails
+            {
+                Title = "Internal Server Error",
+                Detail = "Server error",
+                Status = StatusCodes.Status500InternalServerError,
+                Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
+            };
+
+            var json = JsonSerializer.Serialize(problemDetails);
+
+            httpContext.Response.WriteAsync(json, cancellationToken);
+
+            Console.WriteLine("Server error");
         }
-    }   
+
+        return new ValueTask<bool>(true);
+    }
 }

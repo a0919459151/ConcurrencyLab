@@ -1,6 +1,18 @@
 @ConcurrencyLab_HostAddress = http://localhost:5276
 
-GET {{ConcurrencyLab_HostAddress}}/weatherforecast/
-Accept: application/json
-
+### Get all products
+GET {{ConcurrencyLab_HostAddress}}/product/GetProducts
 ###
+
+### Get Report by id 1
+GET {{ConcurrencyLab_HostAddress}}/product/GetReport/1
+###
+
+### DecreaseProductAmount by id 1
+POST {{ConcurrencyLab_HostAddress}}/product/DecreaseProductAmount
+Content-Type: application/json
+
+{
+    "id": 1
+}
+####

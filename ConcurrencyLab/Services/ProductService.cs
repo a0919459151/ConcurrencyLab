@@ -1,20 +1,24 @@
-﻿using ConcurrencyLab.Exceptions;
+﻿using RedLockNet;
+using System.Text;
 
 namespace ConcurrencyLab.Services;
 
 public class ProductService
 {
-    static int _apicallTotalCount = 0;
-    static int _apiConcurrencyOccurTimes = 0;
+    static int _apicallSuccessCount = 0;  // 商品數量修改成功的次數
+    static int _apicallFailCount = 0;  // 商品數量修改的次數
+    static int _apiConcurrencyOccurTimes = 0;  // EF Core 發生 Concurrency Exception 的次數
 
-    // static object lock
+    // Static object lock
     private static readonly object _lock = new object();
 
     private readonly ConcurrencyLabDbContext _context;
+    private readonly IDistributedLockFactory _redlockFactory;
 
-    public ProductService(ConcurrencyLabDbContext context)
+    public ProductService(ConcurrencyLabDbContext context, IDistributedLockFactory redlockFactory)
     {
         _context = context;
+        _redlockFactory = redlockFactory;
     }
 
     //  GetProducts
@@ -46,55 +50,19 @@ public class ProductService
             Amount = request.Amount
         };
 
-        // Save
+        // Add
         _context.Products.Add(product);
+
         // Save
         _context.SaveChanges();
 
         return product.Id;
     }
 
-    // 扣商品數量 1 (no lock)
-    // DecreaseProductAmount
+    // 扣商品數量 1 (no lock & concurrency token)
     public void DecreaseProductAmount(DecreaseProductAmountRequestDto request)
     {
-        // Query
-        var product = _context.Products.Find(request.Id);
-
-        // Not found    
-        if (product == null)
-        {
-            throw new AppException("Product not found");
-        }
-
-        product.Amount -= 1;
-
-        // 數量不足
-        if (product.Amount < 0)
-        {
-            throw new AppException("Product amount is not enough");
-        }
-
-        Console.WriteLine($"=========================================== \n API Call Success Count: {++_apicallTotalCount} \n product Id: {product.Id}, 商品剩餘數量: {product.Amount}");
-
         try
-        {
-            // Save
-            _context.SaveChanges();
-        }
-        // Concurrency count
-        catch (DbUpdateConcurrencyException ex)
-        {
-            _apiConcurrencyOccurTimes++;
-            throw;
-        }
-
-    }
-
-    // 扣商品數量 1 (with object lock)
-    public void DecreaseProductAmountWithObjectLock(DecreaseProductAmountRequestDto request)
-    {
-        lock (_lock)
         {
             // Query
             var product = _context.Products.Find(request.Id);
@@ -105,6 +73,9 @@ public class ProductService
                 throw new AppException("Product not found");
             }
 
+            // sleep
+            Thread.Sleep(1000);
+
             product.Amount -= 1;
 
             // 數量不足
@@ -113,24 +84,195 @@ public class ProductService
                 throw new AppException("Product amount is not enough");
             }
 
-            Console.WriteLine($"=========================================== \n API Call Success Count: {++_apicallTotalCount} \n product Id: {product.Id}, 商品剩餘數量: {product.Amount}");
-
             // Save
             _context.SaveChanges();
+
+            PrintLog(product);
+        }
+        // Concurrency count
+        catch (DbUpdateConcurrencyException)
+        {
+            _apiConcurrencyOccurTimes++;
+            _apicallFailCount++;
+            throw new AppException("EF Core occurs Concurrency Exception");
+        }
+        // Fail count
+        catch (Exception)
+        {
+            _apicallFailCount++;
+            throw;
         }
     }
 
-
-    // GetReport
-    public string GetReport()
+    // 扣商品數量 1 (row version)
+    public void DecreaseProductAmountWithRowVersion(DecreaseProductAmountRequestDto request)
     {
-        var productAmount = _context.Products
-            .Where(p => p.Id == 1)
-            .Select(p => p.Amount)
+        try
+        {
+            // Query
+            var product = _context.Products.Find(request.Id);
+
+            // Not found
+            if (product == null)
+            {
+                throw new AppException("Product not found");
+            }
+
+            // sleep
+            Thread.Sleep(300);
+
+            product.Amount -= 1;
+            product.Version = Guid.NewGuid();  // update version
+
+            // 數量不足
+            if (product.Amount < 0)
+            {
+                throw new AppException("Product amount is not enough");
+            }
+
+            // Save
+            _context.SaveChanges();
+
+            PrintLog(product);
+        }
+        // Concurrency count
+        catch (DbUpdateConcurrencyException)
+        {
+            _apiConcurrencyOccurTimes++;
+            _apicallFailCount++;
+            throw new AppException("EF Core occurs Concurrency Exception");
+        }
+        // Fail count
+        catch (Exception)
+        {
+            _apicallFailCount++;
+            throw;
+        }
+    }
+
+    // 扣商品數量 1 (with object lock)
+    public void DecreaseProductAmountWithObjectLock(DecreaseProductAmountRequestDto request)
+    {
+        try
+        {
+            lock (_lock)
+            {
+                // Query
+                var product = _context.Products.Find(request.Id);
+
+                // Not found    
+                if (product == null)
+                {
+                    throw new AppException("Product not found");
+                }
+
+                // sleep
+                Thread.Sleep(300);
+
+                product.Amount -= 1;
+
+                // 數量不足
+                if (product.Amount < 0)
+                {
+                    throw new AppException("Product amount is not enough");
+                }
+
+                // Save
+                _context.SaveChanges();
+
+                PrintLog(product);
+            }
+        }
+        catch (Exception)
+        {
+            _apicallFailCount++;
+            throw;
+        }
+    }
+
+    // 扣商品數量 1 (with redis lock)
+    public void DecreaseProductAmountWithRedisLock(DecreaseProductAmountRequestDto request)
+    {
+        try
+        {
+            string lockKey = $"{nameof(DecreaseProductAmount)}:{request.Id}";
+
+            using var redLock = _redlockFactory.CreateLock(
+                lockKey,
+                TimeSpan.FromMinutes(30),  // lock expire time
+                TimeSpan.FromMinutes(1),  // acquire lock timeout
+                TimeSpan.FromSeconds(1));  // retry every 1 second
+
+            if (!redLock.IsAcquired)
+            {
+                throw new AppException("Failed to acquire lock");
+            }
+
+            var product = _context.Products.Find(request.Id);
+
+            if (product == null)
+            {
+                throw new AppException("Product not found");
+            }
+
+            // Sleep
+            Thread.Sleep(300);
+
+            product.Amount -= 1;
+
+            if (product.Amount < 0)
+            {
+                throw new AppException("Product amount is not enough");
+            }
+
+            // Save
+            _context.SaveChanges();
+
+            PrintLog(product);
+        }
+        catch (Exception)
+        {
+            _apicallFailCount++;
+            throw;
+        }
+    }
+
+    // GetReport/id
+    public string GetReport(int id)
+    {
+        var product = _context.Products
+            .Where(p => p.Id == id)
             .First();
 
-        string response = $"API Call Success Count: {_apicallTotalCount} \nConcurrency Occur Times: {_apiConcurrencyOccurTimes} \n商品原始數量: 100\n商品剩餘數量: {productAmount}";
+        var report = GetReportText(product);
 
-        return response;
+        return report;
     }
+
+    // Print log
+    public void PrintLog(Product product)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine($"API Call Success Count: {++_apicallSuccessCount}");
+        sb.AppendLine($"API Call Fail Count: {_apicallFailCount}");
+        sb.AppendLine($"Concurrency Occur Times: {_apiConcurrencyOccurTimes}");
+        sb.AppendLine($"{{ product Id: {product.Id}, 商品原始數量: {product.OriginalAmount}, 商品剩餘數量: {product.Amount} }}");
+
+        Console.WriteLine(sb.ToString());
+    }
+
+    // Report text
+    public string GetReportText(Product product)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"API Call Success Count: {_apicallSuccessCount}");
+        sb.AppendLine($"API Call Fail Count: {_apicallFailCount}");
+        sb.AppendLine($"Concurrency Occur Times: {_apiConcurrencyOccurTimes}");
+        sb.AppendLine($"商品原始數量: {product.OriginalAmount}");
+        sb.AppendLine($"商品剩餘數量: {product.Amount}");
+
+        return sb.ToString();
+    }
+
 }

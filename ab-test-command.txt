@@ -1,0 +1,1 @@
+ab -n 20 -c 20 -T 'application/json' -p request.json 'http://localhost:5276/Product/DecreaseProductAmount'

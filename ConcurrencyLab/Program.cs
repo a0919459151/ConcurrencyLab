@@ -1,72 +1,35 @@
-using ConcurrencyLab.Middleware.ExceptionHandler;
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+// Register ioc container
+builder.Services
+    .AddExceptionHandler<CustomExceptionHandler>()
+    .AddProblemDetails()
+    .AddDBContext()
+    .AddRedLock()
+    .AddServices();
 
-// ExceptionHandler
-builder.Services.AddExceptionHandler<CustomExceptionHandler>();
-builder.Services.AddProblemDetails();
-
-// EF Core inmemery
-builder.Services.AddDbContext<ConcurrencyLabDbContext>(options =>
-{
-    options.UseInMemoryDatabase("ConcurrencyLab");
-});
-
-// Services
-builder.Services.AddScoped<ProductService>();
+// ignore swagger
+//builder.Services.AddEndpointsApiExplorer();
+//builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Middleware
+// Register middleware
 app.UseExceptionHandler();
-
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseDataSeeding();
 
 app.UseAuthorization();
-
 app.MapControllers();
 
-// Data seeding
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    var logger = services.GetRequiredService<ILogger<Program>>();
+// ignore swagger
+//if (app.Environment.IsDevelopment())
+//{
+//    app.UseSwagger();
+//    app.UseSwaggerUI();
+//}
 
-    try
-    {
-        var context = services.GetRequiredService<ConcurrencyLabDbContext>();
-        context.Database.EnsureCreated();
-        SeedData(context);
-        logger.LogInformation("Data seeding completed.");
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "An error occurred seeding the DB.");
-    }
-}
+Console.WriteLine("Server on!");
 
 app.Run();
-
-
-#region Data seeding
-static void SeedData(ConcurrencyLabDbContext context)
-{
-    if (!context.Products.Any())
-    {
-        context.Products.AddRange(
-            new Product { Id = 1, Name = "§j¶Pπq¡Á", Amount = 100 }
-        );
-        context.SaveChanges();
-    }
-}
-#endregion

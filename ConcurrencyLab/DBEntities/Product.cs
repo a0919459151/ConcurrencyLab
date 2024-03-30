@@ -8,6 +8,12 @@ public class Product
 
     public string Name { get; set; } = null!;
 
-    [ConcurrencyCheck]
+    // 原始數量
+    public int OriginalAmount { get; set; }
+
+    //[ConcurrencyCheck]
     public int Amount { get; set; }
+
+    //[ConcurrencyCheck]
+    public Guid Version { get; set; } = Guid.NewGuid();
 }
