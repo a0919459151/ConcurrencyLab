@@ -74,7 +74,7 @@ public class ProductService
             }
 
             // sleep
-            Thread.Sleep(1000);
+            Thread.Sleep(300);
 
             product.Amount -= 1;
 

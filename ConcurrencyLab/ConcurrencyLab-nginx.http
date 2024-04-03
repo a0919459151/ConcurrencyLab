@@ -1,0 +1,18 @@
+@ConcurrencyLab_Nginx_HostAddress = http://localhost
+
+### Get all products
+GET {{ConcurrencyLab_Nginx_HostAddress}}/product/GetProducts
+###
+
+### Get Report by id 1
+GET {{ConcurrencyLab_Nginx_HostAddress}}/product/GetReport/1
+###
+
+### DecreaseProductAmount by id 1
+POST {{ConcurrencyLab_Nginx_HostAddress}}/product/DecreaseProductAmount
+Content-Type: application/json
+
+{
+    "id": 1
+}
+####

@@ -20,7 +20,11 @@ public static class DependencyInjection
     {
         services.AddDbContext<ConcurrencyLabDbContext>(options =>
         {
-            options.UseInMemoryDatabase("ConcurrencyLab");
+            // Use in memory database
+            //options.UseInMemoryDatabase("ConcurrencyLab");
+
+            // Use sql server
+            options.UseSqlServer("Server=localhost;Database=ConcurrencyLab;User Id=sa;Password=P@ssw0rdd;TrustServerCertificate=True;");
         });
 
         return services;

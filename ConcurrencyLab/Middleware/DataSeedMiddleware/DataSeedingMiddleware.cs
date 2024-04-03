@@ -26,13 +26,13 @@ public class DataSeedingMiddleware
 
         if (!context.Products.Any())
         {
-            var newProduct = new Product { Id = 1, Name = "大同電鍋", OriginalAmount = productAmount, Amount = productAmount };
+            var newProduct = new Product { Name = "大同電鍋", OriginalAmount = productAmount, Amount = productAmount };
 
             await context.Products.AddAsync(newProduct);
 
             await context.SaveChangesAsync();
 
-            Console.WriteLine($"Data seed: {{ Id = 1,Name = 大同電鍋, OriginalAmount = {productAmount}, Amount = {productAmount} }}");
+            Console.WriteLine($"Data seed: {{ Id = {newProduct.Id},Name = 大同電鍋, OriginalAmount = {productAmount}, Amount = {productAmount} }}");
 
             Console.WriteLine("Data seeding completed.");
         }
