@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace ConcurrencyLab.DBEntities;
+namespace ConcurrencyLab.EFCore.DBEntities;
 
 public class Product
 {

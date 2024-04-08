@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace ConcurrencyLab.EFCore
+namespace ConcurrencyLab.EFCore.Migrations
 {
     /// <inheritdoc />
     public partial class Init : Migration

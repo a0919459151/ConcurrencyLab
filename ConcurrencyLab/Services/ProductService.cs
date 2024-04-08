@@ -1,4 +1,6 @@
-﻿using RedLockNet;
+﻿using ConcurrencyLab.EFCore.DBEntities;
+using Medallion.Threading;
+using RedLockNet;
 using System.Text;
 
 namespace ConcurrencyLab.Services;
@@ -14,11 +16,16 @@ public class ProductService
 
     private readonly ConcurrencyLabDbContext _context;
     private readonly IDistributedLockFactory _redlockFactory;
+    private readonly IDistributedLockProvider _sqlLockProvider;
 
-    public ProductService(ConcurrencyLabDbContext context, IDistributedLockFactory redlockFactory)
+    public ProductService(
+        ConcurrencyLabDbContext context,
+        IDistributedLockFactory redlockFactory,
+        IDistributedLockProvider sqlLockProvider)
     {
         _context = context;
         _redlockFactory = redlockFactory;
+        _sqlLockProvider = sqlLockProvider;
     }
 
     //  GetProducts
@@ -237,6 +244,50 @@ public class ProductService
         }
     }
 
+    // DecreaseProductAmountWithSqlLock
+    // 扣商品數量 1 (with sql lock)
+    public void DecreaseProductAmountWithSqlLock(DecreaseProductAmountRequestDto request)
+    {
+        try
+        {
+            string lockKey = $"{nameof(DecreaseProductAmount)}:{request.Id}";
+
+            using var sqlLock = _sqlLockProvider.TryAcquireLock(lockKey, TimeSpan.FromMinutes(1));
+
+            if (sqlLock is null)
+            {
+                throw new AppException("Failed to acquire lock");
+            }
+
+            var product = _context.Products.Find(request.Id);
+
+            if (product == null)
+            {
+                throw new AppException("Product not found");
+            }
+
+            // Sleep
+            Thread.Sleep(300);
+
+            product.Amount -= 1;
+
+            if (product.Amount < 0)
+            {
+                throw new AppException("Product amount is not enough");
+            }
+
+            // Save
+            _context.SaveChanges();
+
+            PrintLog(product);
+        }
+        catch (Exception)
+        {
+            _apicallFailCount++;
+            throw;
+        }
+    }
+
     // GetReport/id
     public string GetReport(int id)
     {
@@ -250,7 +301,7 @@ public class ProductService
     }
 
     // Print log
-    public void PrintLog(Product product)
+    private void PrintLog(Product product)
     {
         var sb = new StringBuilder();
         sb.AppendLine();
@@ -263,7 +314,7 @@ public class ProductService
     }
 
     // Report text
-    public string GetReportText(Product product)
+    private string GetReportText(Product product)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"API Call Success Count: {_apicallSuccessCount}");

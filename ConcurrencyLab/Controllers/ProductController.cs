@@ -58,7 +58,10 @@ public class ProductController : ControllerBase
         //_productServices.DecreaseProductAmountWithObjectLock(request);
 
         // 5. Redis lock
-        _productServices.DecreaseProductAmountWithRedisLock(request);
+        //_productServices.DecreaseProductAmountWithRedisLock(request);
+
+        // 6. Sql lock
+        _productServices.DecreaseProductAmountWithSqlLock(request);
 
         return Ok("OK");
     }

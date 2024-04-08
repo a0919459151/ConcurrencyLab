@@ -2,6 +2,8 @@
 using RedLockNet.SERedis;
 using RedLockNet;
 using StackExchange.Redis;
+using Medallion.Threading.SqlServer;
+using Medallion.Threading;
 
 namespace ConcurrencyLab;
 
@@ -18,13 +20,17 @@ public static class DependencyInjection
     // AddDBContext
     public static IServiceCollection AddDBContext(this IServiceCollection services)
     {
+        // connection string
+        var configuration = services.BuildServiceProvider().GetRequiredService<IConfiguration>();
+        var connStr = configuration.GetConnectionString("DefaultConnection") ?? throw new Exception("DefaultConnection not found");
+
         services.AddDbContext<ConcurrencyLabDbContext>(options =>
         {
             // Use in memory database
             //options.UseInMemoryDatabase("ConcurrencyLab");
 
             // Use sql server
-            options.UseSqlServer("Server=localhost;Database=ConcurrencyLab;User Id=sa;Password=P@ssw0rdd;TrustServerCertificate=True;");
+            options.UseSqlServer(connStr);
         });
 
         return services;
@@ -40,6 +46,18 @@ public static class DependencyInjection
         var redLockFactory = RedLockFactory.Create(multiplexer);
 
         services.AddSingleton<IDistributedLockFactory>(redLockFactory);
+
+        return services;
+    }
+
+    // AddSqlLcok
+    public static IServiceCollection AddSqlLock(this IServiceCollection services)
+    {
+        // connection string
+        var configuration = services.BuildServiceProvider().GetRequiredService<IConfiguration>();
+        var connStr = configuration.GetConnectionString("DefaultConnection") ?? throw new Exception("DefaultConnection not found");
+
+        services.AddSingleton<IDistributedLockProvider>(new SqlDistributedSynchronizationProvider(connStr));
 
         return services;
     }
